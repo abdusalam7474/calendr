@@ -1,10 +1,2 @@
-# Node + Express Service Starter
-
-This is a simple API sample in Node.js with express.js based on [Google Cloud Run Quickstart](https://cloud.google.com/run/docs/quickstarts/build-and-deploy/deploy-nodejs-service).
-
-## Getting Started
-
-Server should run automatically when starting a workspace. To run manually, run:
-```sh
-npm run dev
-```
+# calendr
+4a5e08f305d663800b767b0065650ae77c7c3393
