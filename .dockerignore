@@ -1,0 +1,17 @@
+# Exclude Node.js dependency directory
+node_modules
+
+# Exclude sensitive environment variables file
+.env
+
+# Exclude logs
+npm-debug.log
+*.log
+
+# Exclude version control files
+.git
+.gitignore
+
+# Exclude the Dockerfile itself
+Dockerfile
+.dockerignore
