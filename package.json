@@ -1,0 +1,27 @@
+{
+  "name": "node-express-api",
+  "description": "Simple api sample in Node",
+  "version": "1.0.0",
+  "private": true,
+  "main": "index.js",
+  "scripts": {
+    "dev": "nodemon index.js",
+    "start": "node index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Google LLC",
+  "license": "Apache-2.0",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "dotenv": "^17.0.1",
+    "express": "^4.21.2",
+    "mysql2": "^3.14.1",
+    "node-cron": "^4.2.0",
+    "nodemailer": "^7.0.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
