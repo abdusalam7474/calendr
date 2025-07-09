@@ -4,25 +4,29 @@ const { fromZonedTime, format } = require('date-fns-tz');
 
 const router = express.Router({ mergeParams: true });
 
-async function getAppointment(appointmentId) {
-    const [rows] = await db.query('SELECT * FROM appointments WHERE id = ?', [appointmentId]);
+// MODIFIED: Helper function to get an appointment AND verify it belongs to the logged-in admin
+async function getAppointmentAndVerifyOwner(appointmentId, adminId) {
+    const [rows] = await db.query(
+        'SELECT * FROM appointments WHERE id = ? AND admin_id = ?', 
+        [appointmentId, adminId]
+    );
     return rows[0];
 }
 
-// === CREATE A NEW REMINDER (with optional message) ===
+// === CREATE A NEW REMINDER ===
 router.post('/', async (req, res) => {
     try {
         const { appointmentId } = req.params;
-        // --- NEW: Destructure 'message' from the body ---
+        const adminId = req.admin.id;
         const { reminder_time, client_timezone, message } = req.body;
 
         if (!reminder_time) {
             return res.status(400).json({ message: 'reminder_time is required.' });
         }
 
-        const appointment = await getAppointment(appointmentId);
+        const appointment = await getAppointmentAndVerifyOwner(appointmentId, adminId);
         if (!appointment) {
-            return res.status(404).json({ message: 'Appointment not found.' });
+            return res.status(404).json({ message: 'Appointment not found or you do not have permission to access it.' });
         }
 
         const sourceTimezone = client_timezone || process.env.DEFAULT_TIMEZONE;
@@ -34,10 +38,9 @@ router.post('/', async (req, res) => {
 
         const dbFormattedReminderTime = format(utcReminderTime, 'yyyy-MM-dd HH:mm:ss');
         
-        // --- MODIFIED: Include message in the INSERT query ---
         const [result] = await db.query(
             'INSERT INTO reminders (appointment_id, reminder_time, message) VALUES (?, ?, ?)',
-            [appointmentId, dbFormattedReminderTime, message || null] // Pass message or null
+            [appointmentId, dbFormattedReminderTime, message || null]
         );
 
         res.status(201).json({
@@ -57,14 +60,15 @@ router.post('/', async (req, res) => {
     }
 });
 
-// === GET ALL REMINDERS FOR AN APPOINTMENT (no change needed) ===
+// === GET ALL REMINDERS FOR AN APPOINTMENT ===
 router.get('/', async (req, res) => {
     try {
         const { appointmentId } = req.params;
+        const adminId = req.admin.id;
         
-        const appointment = await getAppointment(appointmentId);
+        const appointment = await getAppointmentAndVerifyOwner(appointmentId, adminId);
         if (!appointment) {
-            return res.status(404).json({ message: 'Appointment not found.' });
+            return res.status(404).json({ message: 'Appointment not found or you do not have permission to access it.' });
         }
 
         const [reminders] = await db.query(
@@ -80,21 +84,20 @@ router.get('/', async (req, res) => {
     }
 });
 
-// === UPDATE A REMINDER (with optional message) ===
+// === UPDATE A REMINDER ===
 router.put('/:reminderId', async (req, res) => {
     try {
         const { appointmentId, reminderId } = req.params;
-        // --- NEW: Destructure 'message' from body ---
+        const adminId = req.admin.id;
         const { reminder_time, client_timezone, message } = req.body;
 
-        // --- MODIFIED: Allow updating time, message, or both ---
         if (!reminder_time && message === undefined) {
              return res.status(400).json({ message: 'Either reminder_time or message must be provided for an update.' });
         }
 
-        const appointment = await getAppointment(appointmentId);
+        const appointment = await getAppointmentAndVerifyOwner(appointmentId, adminId);
         if (!appointment) {
-            return res.status(404).json({ message: 'Appointment not found.' });
+            return res.status(404).json({ message: 'Appointment not found or you do not have permission to access it.' });
         }
 
         const updateFields = [];
@@ -103,7 +106,6 @@ router.put('/:reminderId', async (req, res) => {
         if (reminder_time) {
             const sourceTimezone = client_timezone || process.env.DEFAULT_TIMEZONE;
             const utcReminderTime = fromZonedTime(reminder_time, sourceTimezone);
-
             if (utcReminderTime >= appointment.appointment_date) {
                 return res.status(400).json({ message: 'Reminder time must be set before the appointment time.' });
             }
@@ -111,8 +113,6 @@ router.put('/:reminderId', async (req, res) => {
             updateValues.push(format(utcReminderTime, 'yyyy-MM-dd HH:mm:ss'));
         }
 
-        // message === undefined checks if the key wasn't sent at all.
-        // This allows sending `message: null` to clear it.
         if (message !== undefined) {
             updateFields.push('message = ?');
             updateValues.push(message);
@@ -139,10 +139,18 @@ router.put('/:reminderId', async (req, res) => {
 });
 
 
-// === DELETE A REMINDER (no change needed) ===
+// === DELETE A REMINDER ===
 router.delete('/:reminderId', async (req, res) => {
     try {
         const { appointmentId, reminderId } = req.params;
+        const adminId = req.admin.id;
+
+        // First, ensure the appointment belongs to the admin. This is an indirect way
+        // to ensure they can't delete reminders for other admins' appointments.
+        const appointment = await getAppointmentAndVerifyOwner(appointmentId, adminId);
+        if (!appointment) {
+            return res.status(404).json({ message: 'Appointment not found or you do not have permission to access it.' });
+        }
 
         const [result] = await db.query(
             'DELETE FROM reminders WHERE id = ? AND appointment_id = ?',

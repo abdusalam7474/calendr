@@ -13,11 +13,13 @@
   "author": "Google LLC",
   "license": "Apache-2.0",
   "dependencies": {
+    "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
     "date-fns": "^4.1.0",
     "date-fns-tz": "^3.2.0",
     "dotenv": "^17.0.1",
     "express": "^4.21.2",
+    "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.1",
     "node-cron": "^4.2.0",
     "nodemailer": "^7.0.4"

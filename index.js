@@ -2,11 +2,16 @@ const express = require('express');
 const cors = require('cors');
 require('dotenv').config();
 
-// Import routes
+// --- NEW: Import middleware and new routes ---
+const { protect } = require('./middleware/authMiddleware');
+const authRoutes = require('./routes/auth');
+const publicRoutes = require('./routes/public');
+
+// Import existing routes
 const appointmentRoutes = require('./routes/appointments');
 const reminderRoutes = require('./routes/reminders');
 
-// --- NEW: Import the scheduler initializer ---
+// Import the scheduler initializers
 const { initializeReminderJob } = require('./jobs/reminderScheduler');
 const { initializeThankYouJob } = require('./jobs/thankYouScheduler');
 
@@ -20,18 +25,26 @@ app.use(express.urlencoded({ extended: true }));
 
 // A simple root route
 app.get('/', (req, res) => {
-  res.send('Welcome to the Meeting Booking API!');
+  res.send('Welcome to the Multi-Admin Meeting Booking API!');
 });
 
-// Use the appointment routes
-app.use('/api/appointments', appointmentRoutes);
-app.use('/api/appointments/:appointmentId/reminders', reminderRoutes);
+// --- NEW ROUTE SETUP ---
+
+// Public routes for client booking and admin authentication
+app.use('/api/public', publicRoutes);
+app.use('/api/auth', authRoutes);
+
+// Protected routes for admin management.
+// All routes defined in 'appointmentRoutes' and 'reminderRoutes' will now require a valid token.
+app.use('/api/appointments', protect, appointmentRoutes);
+app.use('/api/appointments/:appointmentId/reminders', protect, reminderRoutes);
+
 
 // Start the server
 app.listen(PORT, () => {
   console.log(`Server is running on http://localhost:${PORT}`);
   
-  // --- NEW: Initialize the background job when the server is ready ---
+  // Initialize the background jobs
   initializeReminderJob();
   initializeThankYouJob();
 });
