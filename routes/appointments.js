@@ -58,6 +58,62 @@ router.get('/by-date', async (req, res) => {
   }
 });
 
+
+// @desc    Get full details of a single appointment, including custom data
+// @route   GET /api/appointments/:appointmentId/details
+// @access  Protected
+router.get('/:appointmentId/details', async (req, res) => {
+  const adminId = req.admin.id;
+  const { appointmentId } = req.params;
+
+  try {
+      // First, get the core appointment details and verify ownership by the logged-in admin.
+      const [appointments] = await db.query(
+          `SELECT 
+              a.id, 
+              a.client_name, 
+              a.client_email, 
+              a.appointment_date, 
+              a.details, 
+              a.created_at, 
+              s.slug as booking_page_slug
+          FROM appointments a
+          LEFT JOIN slugs s ON a.slug_id = s.id
+          WHERE a.id = ? AND a.admin_id = ?`,
+          [appointmentId, adminId]
+      );
+
+      if (appointments.length === 0) {
+          return res.status(404).json({ message: 'Appointment not found or you do not have permission to view it.' });
+      }
+      const appointmentDetails = appointments[0];
+
+      // Now, get the custom field data associated with this appointment.
+      const [customData] = await db.query(
+          `SELECT 
+              sf.field_label, 
+              acd.field_value 
+          FROM appointment_custom_data acd
+          JOIN slug_fields sf ON acd.slug_field_id = sf.id
+          WHERE acd.appointment_id = ?`,
+          [appointmentId]
+      );
+      
+      // Combine the core details with the custom data for a complete response.
+      const response = {
+          ...appointmentDetails,
+          custom_data: customData
+      };
+
+      res.json(response);
+
+  } catch (error) {
+      console.error('Error fetching appointment details:', error);
+      res.status(500).json({ message: 'An error occurred while fetching appointment details.' });
+  }
+});
+
+
 // === GET ALL BOOKED DATE/TIME SLOTS for the logged-in admin ===
 router.get('/booked-slots', async (req, res) => {
   const adminId = req.admin.id; // Get the admin ID from the token
@@ -138,6 +194,7 @@ router.get('/cancelled/by-date', async (req, res) => {
 });
 
 // === CANCEL AN APPOINTMENT for the logged-in admin ===
+// === CANCEL AN APPOINTMENT for the logged-in admin ===
 router.delete('/:id', async (req, res) => {
   const { id } = req.params;
   const adminId = req.admin.id;
@@ -149,7 +206,6 @@ router.delete('/:id', async (req, res) => {
   try {
     await connection.beginTransaction();
 
-    // Verify the appointment belongs to the logged-in admin before proceeding
     const [rows] = await connection.query(
         'SELECT * FROM appointments WHERE id = ? AND admin_id = ? FOR UPDATE', 
         [id, adminId]
@@ -162,10 +218,11 @@ router.delete('/:id', async (req, res) => {
     
     const appointmentToCancel = rows[0];
 
-    // Move to cancelled_appointments, preserving the admin_id
+    // MODIFIED: Also move the slug_id to the cancelled_appointments table
     await connection.query('INSERT INTO cancelled_appointments SET ?', {
         id: appointmentToCancel.id,
         admin_id: appointmentToCancel.admin_id,
+        slug_id: appointmentToCancel.slug_id, // <-- ADDED THIS LINE
         client_name: appointmentToCancel.client_name,
         client_email: appointmentToCancel.client_email,
         appointment_date: appointmentToCancel.appointment_date,

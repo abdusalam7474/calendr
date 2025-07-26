@@ -10,8 +10,8 @@ const transporter = nodemailer.createTransport({
   },
 });
 
-// MODIFIED: Accepts the specific admin's notification email
-async function sendBookingEmails(appointmentDetails, clientTimezone, adminNotificationEmail) {
+// MODIFIED: Accepts customData object for additional email details
+async function sendBookingEmails(appointmentDetails, clientTimezone, adminNotificationEmail, customData = {}) {
   const { id, client_name, client_email, appointment_date, details } = appointmentDetails;
 
   const appDefaultTimezone = process.env.DEFAULT_TIMEZONE;
@@ -20,6 +20,14 @@ async function sendBookingEmails(appointmentDetails, clientTimezone, adminNotifi
 
   const clientLocalTime = formatInTimeZone(appointment_date, clientTimezone, dateTimeFormat);
   const appLocalTime = formatInTimeZone(appointment_date, appDefaultTimezone, dateTimeFormat);
+  
+  // NEW: Generate HTML for custom fields
+  let customFieldsHtml = '';
+  if (Object.keys(customData).length > 0) {
+      for (const [label, value] of Object.entries(customData)) {
+          customFieldsHtml += `<li><strong>${label}:</strong> ${value}</li>`;
+      }
+  }
 
   const clientMailOptions = {
     from: `"${appName}" <${process.env.EMAIL_USER}>`,
@@ -30,6 +38,7 @@ async function sendBookingEmails(appointmentDetails, clientTimezone, adminNotifi
       <p>Your appointment has been successfully booked. Here are the details:</p>
       <ul>
         <li><strong>Date & Time:</strong> ${clientLocalTime} (${clientTimezone})</li>
+        ${customFieldsHtml} 
         <li><strong>Details:</strong> ${details || 'N/A'}</li>
       </ul>
       <p>We look forward to meeting with you!</p>
@@ -38,7 +47,7 @@ async function sendBookingEmails(appointmentDetails, clientTimezone, adminNotifi
 
   const adminMailOptions = {
     from: `"${appName} Booker" <${process.env.EMAIL_USER}>`,
-    to: adminNotificationEmail, // USE THE ADMIN'S SPECIFIC EMAIL
+    to: adminNotificationEmail,
     subject: `🎉 New Appointment with ${client_name}`,
     html: `
       <h1>A new appointment has been booked.</h1>
@@ -48,6 +57,7 @@ async function sendBookingEmails(appointmentDetails, clientTimezone, adminNotifi
         <li><strong>Client Email:</strong> ${client_email}</li>
         <li><strong>Time (App Timezone - ${appDefaultTimezone}):</strong> ${appLocalTime}</li>
         <li><strong>Time (Client Timezone - ${clientTimezone}):</strong> ${clientLocalTime}</li>
+        ${customFieldsHtml}
         <li><strong>Details:</strong> ${details || 'N/A'}</li>
       </ul>
     `,
@@ -64,7 +74,7 @@ async function sendBookingEmails(appointmentDetails, clientTimezone, adminNotifi
   }
 }
 
-// MODIFIED: Accepts the specific admin's notification email
+// ... (The rest of the file remains the same)
 async function sendCancellationEmails(appointmentDetails, customMessage = null, adminNotificationEmail) {
   const { client_name, client_email, appointment_date, details } = appointmentDetails;
 
@@ -121,7 +131,6 @@ async function sendCancellationEmails(appointmentDetails, customMessage = null, 
   }
 }
 
-// UNCHANGED: sendReminderEmail does not notify the admin, so no change needed.
 async function sendReminderEmail(reminderDetails) {
   const { 
     client_name, 
@@ -169,7 +178,6 @@ async function sendReminderEmail(reminderDetails) {
   }
 }
 
-// UNCHANGED: sendThankYouEmail does not notify the admin, so no change needed.
 async function sendThankYouEmail(thankYouDetails) {
   const { 
     client_name, 
@@ -211,4 +219,45 @@ async function sendThankYouEmail(thankYouDetails) {
   }
 }
 
-module.exports = { sendBookingEmails, sendCancellationEmails, sendReminderEmail, sendThankYouEmail };
+// --- NEW FUNCTION ---
+// @desc    Sends a password reset email to a user.
+// @param   {string} userEmail - The email address of the recipient.
+// @param   {string} resetToken - The non-hashed, single-use token.
+async function sendPasswordResetEmail(userEmail, resetToken) {
+  const appName = process.env.CLIENT_FACING_APP_NAME;
+  
+  // IMPORTANT: Replace 'http://your-frontend-app.com' with the actual URL
+  // of your frontend application's password reset page.
+  const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
+
+  const mailOptions = {
+    from: `"${appName}" <${process.env.EMAIL_USER}>`,
+    to: userEmail,
+    subject: `Password Reset Request for ${appName}`,
+    html: `
+      <h1>You have requested a password reset</h1>
+      <p>Please click on the following link to create a new password. This link is valid for 1 hour.</p>
+      <p><a href="${resetUrl}" style="font-weight: bold; color: #1a73e8;">Reset Your Password</a></p>
+      <p>If you did not request this, please ignore this email and your password will remain unchanged.</p>
+    `,
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    console.log(`Successfully sent password reset email to ${userEmail}.`);
+    return true;
+  } catch (error) {
+    console.error(`Failed to send password reset email to ${userEmail}:`, error);
+    return false;
+  }
+}
+
+
+// --- UPDATE EXPORTS ---
+module.exports = { 
+  sendBookingEmails, 
+  sendCancellationEmails, 
+  sendReminderEmail, 
+  sendThankYouEmail,
+  sendPasswordResetEmail // Add the new function to the exports
+};
