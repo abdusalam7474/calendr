@@ -61,6 +61,7 @@ router.get('/:adminSlug/:bookingSlug/form', async (req, res) => {
             return res.status(404).json({ message: 'This booking link is not valid.' });
         }
 
+        /*
         const compulsoryFields = [
             { field_name: 'client_name', field_label: 'Your Name', field_type: 'text', is_required: true },
             { field_name: 'client_email', field_label: 'Your Email', field_type: 'email', is_required: true },
@@ -69,6 +70,11 @@ router.get('/:adminSlug/:bookingSlug/form', async (req, res) => {
         res.json({
             slug: page.slug,
             fields: [...compulsoryFields, ...page.fields],
+        });
+        */
+        res.json({
+            slug: page.slug,
+            fields: [...page.fields],
         });
 
     } catch (error) {
