@@ -134,4 +134,46 @@ router.put('/:slugId', async (req, res) => {
     }
 });
 
+
+// @desc    Delete a booking page slug
+// @route   DELETE /api/slugs/:slugId
+// @access  Protected
+router.delete('/:slugId', async (req, res) => {
+    const adminId = req.admin.id;
+    const { slugId } = req.params;
+
+    const connection = await db.getConnection();
+    try {
+        await connection.beginTransaction();
+
+        // 1. Verify ownership of the slug
+        const [slugs] = await connection.query(
+            'SELECT id FROM slugs WHERE id = ? AND admin_id = ?', 
+            [slugId, adminId]
+        );
+
+        if (slugs.length === 0) {
+            await connection.rollback();
+            // Slug not found or doesn't belong to this admin
+            return res.status(404).json({ message: 'Booking page not found.' });
+        }
+
+        // 2. Delete the slug.
+        // The database's 'ON DELETE CASCADE' constraints will handle deleting all related data,
+        // including appointments, custom fields, reminders, etc.
+        await connection.query('DELETE FROM slugs WHERE id = ?', [slugId]);
+
+        await connection.commit();
+
+        res.json({ message: 'Booking page and all its associated data have been deleted successfully.' });
+
+    } catch (error) {
+        if (connection) await connection.rollback();
+        console.error('Error deleting slug:', error);
+        res.status(500).json({ message: 'Server error while deleting booking page.' });
+    } finally {
+        if (connection) connection.release();
+    }
+});
+
 module.exports = router;
